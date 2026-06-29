@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import { Video } from "../models/video.model.js"; 
 
 // ─── helper (not exported) ───────────────────────────────────────────────────
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -212,4 +213,70 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+// add to watch history
+const addToWatchHistory = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    const video = await Video.findById(videoId);
+
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    await User.findByIdAndUpdate(
+        req.user._id,
+        { $addToSet: { watchHistory: videoId } },
+        { new: true }
+    );
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Added to watch history")
+    );
+});
+
+//get watch history
+const getWatchHistory = asyncHandler(async (req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: { _id: req.user._id }
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        fullName: 1,
+                                        username: 1,
+                                        avatar: 1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields: {
+                            owner: { $first: "$owner" }
+                        }
+                    }
+                ]
+            }
+        }
+    ]);
+
+    return res.status(200).json(
+        new ApiResponse(200, user[0].watchHistory, "Watch history fetched")
+    );
+});
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken, addToWatchHistory, getWatchHistory };

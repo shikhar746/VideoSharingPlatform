@@ -3,12 +3,17 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Video } from "../models/video.model.js";
 import { invalidateCache } from "../middlewares/cache.middleware.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
 // GET /api/v1/videos
 // Returns all published videos. This is a read-heavy, public endpoint —
 // a good first candidate for caching.
 const getAllVideos = asyncHandler(async (req, res) => {
-    const videos = await Video.find({ isPublished: true }).sort({ createdAt: -1 });
+    const { page = 1, limit = 10 } = req.query;
+    const videos = await Video.find({ isPublished: true })
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit));
 
     return res.status(200).json(
         new ApiResponse(200, videos, "Videos fetched successfully")
@@ -25,6 +30,8 @@ const getVideoById = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Video not found");
     }
 
+    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+
     return res.status(200).json(
         new ApiResponse(200, video, "Video fetched successfully")
     );
@@ -36,23 +43,43 @@ const getVideoById = asyncHandler(async (req, res) => {
 // build out video upload (this assumes req.body has title/description/etc.
 // and that videoFile/thumbnail URLs are already resolved, e.g. via Cloudinary).
 const createVideo = asyncHandler(async (req, res) => {
-    const { title, description, duration, videoFile, thumbnail } = req.body;
+    const { title, description, duration } = req.body;
 
-    if ([title, description, videoFile, thumbnail].some((f) => !f)) {
-        throw new ApiError(400, "All fields are required");
+    if (!title || !description || !duration) {
+        throw new ApiError(400, "Title, description and duration are required");
+    }
+
+    const videoLocalPath = req.files?.videoFile?.[0]?.path;
+    const thumbnailLocalPath = req.files?.thumbnail?.[0]?.path;
+
+    if (!videoLocalPath) {
+        throw new ApiError(400, "Video file is required");
+    }
+
+    if (!thumbnailLocalPath) {
+        throw new ApiError(400, "Thumbnail is required");
+    }
+
+    const videoFile = await uploadOnCloudinary(videoLocalPath);
+    const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
+
+    if (!videoFile) {
+        throw new ApiError(500, "Failed to upload video");
+    }
+
+    if (!thumbnail) {
+        throw new ApiError(500, "Failed to upload thumbnail");
     }
 
     const video = await Video.create({
         title,
         description,
         duration,
-        videoFile,
-        thumbnail,
-        owner: req.user?._id, // assumes auth middleware sets req.user
+        videoFile: videoFile.url,
+        thumbnail: thumbnail.url,
+        owner: req.user?._id,
     });
 
-    // Invalidate the cached video list so the new video shows up immediately
-    // instead of waiting out the TTL.
     await invalidateCache("cache:/api/v1/videos*");
 
     return res.status(201).json(
