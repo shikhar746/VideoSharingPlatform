@@ -1,5 +1,3 @@
-//lets continue connecting express here instead of index.js
-
 import express from "express"
 import cors from "cors"
 import cookieParser from "cookie-parser"
@@ -11,28 +9,22 @@ app.use( cors({
     credentials:true
 }))
 
-//setup how to recieve data p3opl3 2ill give in
-//json format or in forms directly
 app.use(express.json({limit :"16kb"}))
 app.use(express.urlencoded({extended: true, limit:
     "16kb"
 }))
 app.use(express.static("public"))
-app.use(cookieParser())//to take data from cookies
+app.use(cookieParser())
 
 //routes import
 import userRouter from "./routes/user.routes.js"
+import videoRouter from "./routes/video.routes.js"
 
 //routes declaration
 app.use("/api/v1/users", userRouter)
+app.use("/api/v1/videos", videoRouter)
 
 //http://localhost:8000/api/v1/users/register
-
-
-
-
-
-
-
+//http://localhost:8000/api/v1/videos
 
 export {app}
