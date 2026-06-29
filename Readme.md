@@ -1,14 +1,35 @@
-# chai aur backend series
+# VideoTube Backend
 
-This is my first project on backend
+A production-ready REST API for a video sharing platform built with Node.js, Express, MongoDB, and Redis.
 
-Model's link on Eraser
-https://app.eraser.io/workspace/\YtPqZ1VogxGy1jzIDkzj
+## Tech Stack
+- Node.js + Express 5
+- MongoDB + Mongoose
+- Redis (Upstash) for caching
+- Cloudinary for media storage
+- JWT authentication (access + refresh tokens)
 
+## Features
+- User registration with avatar/cover image upload
+- JWT auth with access tokens (15m) and refresh tokens (7d)
+- Redis caching on video endpoints with cache invalidation
+- Protected routes via auth middleware
 
-database link on mongoDB
-mongodb+srv://vanshsrivastava746_db_user:Shikhar@746@cluster0.i0aqfet.mongodb.net/
+## API Endpoints
 
-ip address on mongodb atlas
-203.110.247.86/32
-(includes your current IP address)
+### Users
+- POST /api/v1/users/register
+- POST /api/v1/users/login
+- POST /api/v1/users/logout (protected)
+- POST /api/v1/users/refresh-token
+
+### Videos
+- GET /api/v1/videos
+- GET /api/v1/videos/:videoId
+- POST /api/v1/videos (protected)
+
+## Setup
+1. Clone the repo
+2. Run `npm install`
+3. Create `.env` from `.env.example`
+4. Run `npm run dev`
