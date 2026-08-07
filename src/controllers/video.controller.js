@@ -1,13 +1,12 @@
+import { isValidObjectId } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Video } from "../models/video.model.js";
 import { invalidateCache } from "../middlewares/cache.middleware.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 
 // GET /api/v1/videos
-// Returns all published videos. This is a read-heavy, public endpoint —
-// a good first candidate for caching.
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
     const videos = await Video.find({ isPublished: true })
@@ -23,6 +22,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
 // GET /api/v1/videos/:videoId
 const getVideoById = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
+    if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid video ID");
 
     const video = await Video.findById(videoId);
 
@@ -38,10 +38,6 @@ const getVideoById = asyncHandler(async (req, res) => {
 });
 
 // POST /api/v1/videos
-// Not part of the original ask, but included as a minimal example of how
-// to invalidate the cache after a write — wire this up once you actually
-// build out video upload (this assumes req.body has title/description/etc.
-// and that videoFile/thumbnail URLs are already resolved, e.g. via Cloudinary).
 const createVideo = asyncHandler(async (req, res) => {
     const { title, description, duration } = req.body;
 
@@ -87,4 +83,114 @@ const createVideo = asyncHandler(async (req, res) => {
     );
 });
 
-export { getAllVideos, getVideoById, createVideo };
+// PATCH /api/v1/videos/:videoId
+const updateVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+    const { title, description } = req.body;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video ID");
+    }
+
+    if (!title && !description && !req.file) {
+        throw new ApiError(400, "At least one field (title, description, or thumbnail) is required to update");
+    }
+
+    const video = await Video.findById(videoId);
+
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    if (!video.owner.equals(req.user._id)) {
+        throw new ApiError(403, "Unauthorized to update this video");
+    }
+
+    let thumbnailUrl = video.thumbnail;
+    if (req.file?.path) {
+        const thumbnail = await uploadOnCloudinary(req.file.path);
+        if (!thumbnail.url) {
+            throw new ApiError(500, "Error while uploading thumbnail");
+        }
+        await deleteFromCloudinary(video.thumbnail);
+        thumbnailUrl = thumbnail.url;
+    }
+
+    const updatedVideo = await Video.findByIdAndUpdate(
+        videoId,
+        {
+            $set: {
+                title: title || video.title,
+                description: description || video.description,
+                thumbnail: thumbnailUrl
+            }
+        },
+        { new: true }
+    );
+
+    await invalidateCache("cache:/api/v1/videos*");
+
+    return res.status(200).json(
+        new ApiResponse(200, updatedVideo, "Video updated successfully")
+    );
+});
+
+// DELETE /api/v1/videos/:videoId
+const deleteVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video ID");
+    }
+
+    const video = await Video.findById(videoId);
+
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    if (!video.owner.equals(req.user._id)) {
+        throw new ApiError(403, "Unauthorized to delete this video");
+    }
+
+    await deleteFromCloudinary(video.videoFile, "video");
+    await deleteFromCloudinary(video.thumbnail, "image");
+
+    await Video.findByIdAndDelete(videoId);
+
+    await invalidateCache("cache:/api/v1/videos*");
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Video deleted successfully")
+    );
+});
+
+// PATCH /api/v1/videos/toggle/v/:videoId
+const togglePublishStatus = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video ID");
+    }
+
+    const video = await Video.findById(videoId);
+
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    if (!video.owner.equals(req.user._id)) {
+        throw new ApiError(403, "Unauthorized to modify this video");
+    }
+
+    video.isPublished = !video.isPublished;
+    await video.save({ validateBeforeSave: false });
+
+    await invalidateCache("cache:/api/v1/videos*");
+
+    return res.status(200).json(
+        new ApiResponse(200, { isPublished: video.isPublished }, "Video publish status toggled successfully")
+    );
+});
+
+export { getAllVideos, getVideoById, createVideo, updateVideo, deleteVideo, togglePublishStatus };

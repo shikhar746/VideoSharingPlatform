@@ -3,6 +3,9 @@ import {
     getAllVideos,
     getVideoById,
     createVideo,
+    updateVideo,
+    deleteVideo,
+    togglePublishStatus
 } from "../controllers/video.controller.js";
 import { cacheMiddleware } from "../middlewares/cache.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -11,7 +14,13 @@ import { upload } from "../middlewares/multer.middleware.js";
 const router = Router();
 
 router.route("/").get(cacheMiddleware(60), getAllVideos);
-router.route("/:videoId").get(cacheMiddleware(60), getVideoById);
+router
+    .route("/:videoId")
+    .get(cacheMiddleware(60), getVideoById)
+    .patch(verifyJWT, upload.single("thumbnail"), updateVideo)
+    .delete(verifyJWT, deleteVideo);
+
+router.route("/toggle/v/:videoId").patch(verifyJWT, togglePublishStatus);
 
 router.route("/").post(
     verifyJWT,
@@ -22,4 +31,4 @@ router.route("/").post(
     createVideo
 );
 
-export default router;
+export default router;

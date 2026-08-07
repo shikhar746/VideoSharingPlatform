@@ -4,21 +4,25 @@
   "description": "a sole backend project",
   "keywords": [
     "javascript",
-    "backend",
-    "chai"
+    "backend"
   ],
   "license": "ISC",
   "author": "Shikhar Srivastava",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node src/index.js",
     "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --runInBand --detectOpenHandles"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/preset-env": "^8.0.2",
+    "babel-jest": "^30.4.1",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.14",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "supertest": "^7.2.2"
   },
   "dependencies": {
     "@upstash/redis": "^1.38.0",

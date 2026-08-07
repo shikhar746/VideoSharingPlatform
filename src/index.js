@@ -6,6 +6,7 @@ import connectDB from "./db/index.js";
 import { connectRedis } from "./db/redis.js";
 import {app} from "./app.js";
 
+// this actually silently fails when deployed coz .env does not exist in production, but we don't want to crash the app for that reason, so we just log it and move on
 dotenv.config({
     path: './.env'
 })
